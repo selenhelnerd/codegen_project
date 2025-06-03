@@ -7,6 +7,7 @@ from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
 
+{# ------------------------------------------------------------- #}
 {% macro fix_type(sql_type) -%}
   {%- set t = sql_type.upper() -%}
   {%- if t.startswith('INTEGER') -%} Integer
@@ -20,25 +21,34 @@ Base = declarative_base()
   {%- endif -%}
 {%- endmacro %}
 
-{# ---------------------------------------- #}
+{# ------------------------------------------------------------- #}
 {% for tbl in tables %}
 # ----------------------------------------
-class {{ tbl.name.replace('_', ' ').title().replace(' ', '') }}(Base):
+class {{ tbl.name.replace('_',' ').title().replace(' ','') }}(Base):
     __tablename__ = "{{ tbl.name }}"
 {% if tbl.comment %}
     # Comment: {{ tbl.comment }}
 {% endif %}
 
-    {# Her sütun için Column(...) kodu #}
+    {# Her sütun için Column(...) üretelim #}
     {% for col in tbl.columns %}
         {%- set is_fk = false -%}
         {%- set fk_target = None -%}
+
+        {# 1) Eğer database’de inspector.get_foreign_keys() listesinde bu sütun varsa, onu kullan #}
         {%- for fk in tbl.foreign_keys %}
             {%- if fk.name == col.name %}
                 {%- set is_fk = true -%}
                 {%- set fk_target = fk.target_table ~ "." ~ fk.target_column -%}
             {%- endif %}
         {%- endfor %}
+
+        {# 2) Eğer yukarıda bulunamadıysa “_<tabloadı>_id” şekliyle otomatik eşleme dene #}
+        {%- if not is_fk and col.name.endswith('_id') and not col.primary_key %}
+            {%- set ref_table = col.name[:-3] -%}
+            {%- set is_fk = true -%}
+            {%- set fk_target = ref_table ~ ".id" -%}
+        {%- endif %}
 
         {%- if is_fk %}
     {{ col.name }} = Column(
@@ -60,21 +70,21 @@ class {{ tbl.name.replace('_', ' ').title().replace(' ', '') }}(Base):
 {% endfor %}
 
 
-{# ---------------------------------------- #}
-{# VIEWS (read‐only autoload) #}
+{# ------------------------------------------------------------- #}
+{# VIEWS (read‐only olarak autoload yapılacak) #}
 {% if views %}
 # ========================================
 {% for vw in views %}
 # View: {{ vw.name }}
-class {{ vw.name.replace('_', ' ').title().replace(' ', '') }}(Base):
+class {{ vw.name.replace('_',' ').title().replace(' ','') }}(Base):
     __tablename__ = "{{ vw.name }}"
     __table_args__ = {"autoload": True, "autoload_with": None}
 {% endfor %}
 {% endif %}
 
 
-{# ---------------------------------------- #}
-{# FONKSİYON ve TRIGGER DDL’LERİ (yorum-blok içinde) #}
+{# ------------------------------------------------------------- #}
+{# FONKSİYON ve TRIGGER DDL’LERİ (Yorum‐blok içinde) #}
 {% if functions %}
 # ========================================
 # Fonksiyon Tanımları (DDL)
