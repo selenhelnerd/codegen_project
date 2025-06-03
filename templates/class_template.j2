@@ -29,7 +29,7 @@ class {{ tbl.name.replace('_', ' ').title().replace(' ', '') }}(Base):
     # Comment: {{ tbl.comment }}
 {% endif %}
 
-    {# Her sütun için Column(...) tanımını yapalım #}
+    {# Her sütun için Column(...) kodu #}
     {% for col in tbl.columns %}
         {%- set is_fk = false -%}
         {%- set fk_target = None -%}
@@ -61,7 +61,7 @@ class {{ tbl.name.replace('_', ' ').title().replace(' ', '') }}(Base):
 
 
 {# ---------------------------------------- #}
-{# VIEWS (Read‐only olarak autoload yapılacak) #}
+{# VIEWS (read‐only autoload) #}
 {% if views %}
 # ========================================
 {% for vw in views %}
@@ -74,7 +74,7 @@ class {{ vw.name.replace('_', ' ').title().replace(' ', '') }}(Base):
 
 
 {# ---------------------------------------- #}
-{# FONKSİYON ve TRIGGER DDL’LERİ (Yorum-blok içinde) #}
+{# FONKSİYON ve TRIGGER DDL’LERİ (yorum-blok içinde) #}
 {% if functions %}
 # ========================================
 # Fonksiyon Tanımları (DDL)

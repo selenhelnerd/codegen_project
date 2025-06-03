@@ -2,10 +2,9 @@ import os
 from sqlalchemy import create_engine, MetaData, inspect, text
 from jinja2 import Environment, FileSystemLoader
 
-# ----------------------------------------
-# 1) Veritabanı bağlantı parametreleri
+# 1) Veritabanı bağlantı parametreleri 
 DB_USER = "selen"
-DB_PASSWORD = "selen"       # Postgres kullanıcı parolası
+DB_PASSWORD = "selen"
 DB_HOST = "localhost"
 DB_PORT = 5432
 DB_NAME = "my_large_test_db"
@@ -15,36 +14,30 @@ DATABASE_URL = (
     f"@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 )
 
-# ----------------------------------------
-# 2) SQLAlchemy Engine ve Inspector oluşturma
+# 2) SQLAlchemy Engine ve Inspector
 engine = create_engine(DATABASE_URL)
 inspector = inspect(engine)
-metadata = MetaData()
 
-# ----------------------------------------
-# 3) Tablo bilgilerini çekme
+# 3) Tabloların metadata bilgilerini topla
 tables = []
 for table_name in inspector.get_table_names(schema="public"):
-    # 3.1) Primary key sütunlarını al
+    # 3.1) Primary key sütun listesi
     pk_constraint = inspector.get_pk_constraint(table_name, schema="public")
     pk_cols = pk_constraint.get("constrained_columns", [])
 
-    # 3.2) Kolon detaylarını toplama
+    # 3.2) Kolon bilgileri
     columns = []
     for col in inspector.get_columns(table_name, schema="public"):
         col_name = col["name"]
-        col_info = {
+        columns.append({
             "name": col_name,
             "type": str(col["type"]),
             "nullable": col["nullable"],
-            "default": repr(col["default"])
-                       if col["default"] is not None
-                       else None,
+            "default": repr(col["default"]) if col["default"] is not None else None,
             "primary_key": (col_name in pk_cols),
-        }
-        columns.append(col_info)
+        })
 
-    # 3.3) Foreign key ilişkilerini çekme
+    # 3.3) Foreign key ilişkileri
     fks = []
     for fk in inspector.get_foreign_keys(table_name, schema="public"):
         constrained = fk.get("constrained_columns") or []
@@ -57,7 +50,7 @@ for table_name in inspector.get_table_names(schema="public"):
                 "target_column": referred_cols[0],
             })
 
-    # 3.4) Tabloya kaynakta tanımlı yorum (comment) varsa
+    # 3.4) Tablo yorumu (comment), varsa
     comment_dict = inspector.get_table_comment(table_name, schema="public")
     tbl_comment = comment_dict.get("text")
 
@@ -68,12 +61,10 @@ for table_name in inspector.get_table_names(schema="public"):
         "comment": tbl_comment,
     })
 
-# ----------------------------------------
-# 4) View bilgilerini çekme
+# 4) View’ları topla
 try:
     view_names = inspector.get_view_names(schema="public")
 except NotImplementedError:
-    # Eğer inspect.get_view_names desteklenmiyorsa doğrudan information_schema’dan al
     with engine.connect() as conn:
         result = conn.execute(text("""
             SELECT table_name
@@ -95,8 +86,7 @@ for view_name in view_names:
         "columns": cols,
     })
 
-# ----------------------------------------
-# 5) Fonksiyon (Stored Procedure) DDL’lerini çekme
+# 5) Stored function DDL’lerini topla
 functions = []
 with engine.connect() as conn:
     fn_rows = conn.execute(text("""
@@ -108,7 +98,6 @@ with engine.connect() as conn:
         JOIN pg_namespace n ON p.pronamespace = n.oid
         WHERE n.nspname = 'public';
     """)).fetchall()
-
 for row in fn_rows:
     functions.append({
         "schema": row[0],
@@ -116,8 +105,7 @@ for row in fn_rows:
         "ddl": row[2].strip(),
     })
 
-# ----------------------------------------
-# 6) Trigger DDL’lerini çekme
+# 6) Trigger DDL’lerini topla
 triggers = []
 with engine.connect() as conn:
     trg_rows = conn.execute(text("""
@@ -127,7 +115,6 @@ with engine.connect() as conn:
         FROM information_schema.triggers
         WHERE trigger_schema = 'public';
     """)).fetchall()
-
 for row in trg_rows:
     trigger_name = row[0]
     table_name = row[1]
@@ -141,15 +128,13 @@ for row in trg_rows:
     """
     with engine.connect() as inner_conn:
         trig_def = inner_conn.execute(text(trg_sql)).fetchone()[0]
-
     triggers.append({
         "name": trigger_name,
         "table": table_name,
         "ddl": trig_def.strip(),
     })
 
-# ----------------------------------------
-# 7) Jinja2 Şablonunu Yükleme
+# 7) Jinja2 şablonunu yükle
 template_dir = os.path.join(os.path.dirname(__file__), "templates")
 env = Environment(
     loader=FileSystemLoader(template_dir),
@@ -158,8 +143,7 @@ env = Environment(
 )
 template = env.get_template("class_template.j2")
 
-# ----------------------------------------
-# 8) Şablonu render edip 'models.py' oluşturma
+# 8) Şablonu çalıştırıp output/models.py oluştur
 rendered_code = template.render(
     tables=tables,
     views=views,
