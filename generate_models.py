@@ -1,34 +1,35 @@
-# generate_models.py
-
 import os
 from sqlalchemy import create_engine, MetaData, inspect, text
 from jinja2 import Environment, FileSystemLoader
 
-# --------------------------------------------
-# 1) Ayarlar: Veritabanı bağlantı parametreleri
+# ----------------------------------------
+# 1) Veritabanı bağlantı parametreleri
 DB_USER = "selen"
-DB_PASSWORD = "selen"      # ← PostgreSQL'de 'ALTER ROLE selen WITH PASSWORD ...' ile aynı olmalı
+DB_PASSWORD = "selen"       # Postgres kullanıcı parolası
 DB_HOST = "localhost"
 DB_PORT = 5432
 DB_NAME = "my_large_test_db"
 
-DATABASE_URL = f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+DATABASE_URL = (
+    f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}"
+    f"@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+)
 
-# --------------------------------------------
-# 2) SQLAlchemy engine ve inspector oluşturma
+# ----------------------------------------
+# 2) SQLAlchemy Engine ve Inspector oluşturma
 engine = create_engine(DATABASE_URL)
 inspector = inspect(engine)
 metadata = MetaData()
 
-# --------------------------------------------
-# 3) TABLO BİLGİLERİNİ ÇEKME
+# ----------------------------------------
+# 3) Tablo bilgilerini çekme
 tables = []
 for table_name in inspector.get_table_names(schema="public"):
-    # 3.1) O tablonun primary key sütunlarını alalım
+    # 3.1) Primary key sütunlarını al
     pk_constraint = inspector.get_pk_constraint(table_name, schema="public")
     pk_cols = pk_constraint.get("constrained_columns", [])
 
-    # 3.2) Kolon bilgileri
+    # 3.2) Kolon detaylarını toplama
     columns = []
     for col in inspector.get_columns(table_name, schema="public"):
         col_name = col["name"]
@@ -36,12 +37,14 @@ for table_name in inspector.get_table_names(schema="public"):
             "name": col_name,
             "type": str(col["type"]),
             "nullable": col["nullable"],
-            "default": repr(col["default"]) if col["default"] is not None else None,
-            "primary_key": col_name in pk_cols,
+            "default": repr(col["default"])
+                       if col["default"] is not None
+                       else None,
+            "primary_key": (col_name in pk_cols),
         }
         columns.append(col_info)
 
-    # 3.3) Foreign key bilgileri
+    # 3.3) Foreign key ilişkilerini çekme
     fks = []
     for fk in inspector.get_foreign_keys(table_name, schema="public"):
         constrained = fk.get("constrained_columns") or []
@@ -54,7 +57,7 @@ for table_name in inspector.get_table_names(schema="public"):
                 "target_column": referred_cols[0],
             })
 
-    # 3.4) Opsiyonel comment (eğer tabloya comment atandıysa)
+    # 3.4) Tabloya kaynakta tanımlı yorum (comment) varsa
     comment_dict = inspector.get_table_comment(table_name, schema="public")
     tbl_comment = comment_dict.get("text")
 
@@ -65,12 +68,12 @@ for table_name in inspector.get_table_names(schema="public"):
         "comment": tbl_comment,
     })
 
-
-# --------------------------------------------
-# 4) VIEW BİLGİLERİNİ ÇEKME
+# ----------------------------------------
+# 4) View bilgilerini çekme
 try:
     view_names = inspector.get_view_names(schema="public")
 except NotImplementedError:
+    # Eğer inspect.get_view_names desteklenmiyorsa doğrudan information_schema’dan al
     with engine.connect() as conn:
         result = conn.execute(text("""
             SELECT table_name
@@ -92,14 +95,13 @@ for view_name in view_names:
         "columns": cols,
     })
 
-
-# --------------------------------------------
-# 5) FONKSİYONLARI ÇEKME (PostgreSQL özel)
+# ----------------------------------------
+# 5) Fonksiyon (Stored Procedure) DDL’lerini çekme
 functions = []
 with engine.connect() as conn:
     fn_rows = conn.execute(text("""
         SELECT
-            n.nspname AS schema,
+            n.nspname AS schema_name,
             p.proname AS name,
             pg_get_functiondef(p.oid) AS ddl
         FROM pg_proc p
@@ -114,9 +116,8 @@ for row in fn_rows:
         "ddl": row[2].strip(),
     })
 
-
-# --------------------------------------------
-# 6) TRIGGER’LARI ÇEKME (PostgreSQL özel)
+# ----------------------------------------
+# 6) Trigger DDL’lerini çekme
 triggers = []
 with engine.connect() as conn:
     trg_rows = conn.execute(text("""
@@ -130,17 +131,16 @@ with engine.connect() as conn:
 for row in trg_rows:
     trigger_name = row[0]
     table_name = row[1]
-
-    # Burada parametre kullanmak yerine doğrudan f-string ile tablo ve trigger adını yerleştiriyoruz
-    trig_sql = f"""
-    SELECT pg_get_triggerdef(
-        (SELECT oid FROM pg_trigger 
-         WHERE tgname = '{trigger_name}' AND tgrelid = '{table_name}'::regclass)
-    , true) AS full_ddl;
+    trg_sql = f"""
+      SELECT pg_get_triggerdef(
+          (SELECT oid FROM pg_trigger
+           WHERE tgname = '{trigger_name}'
+             AND tgrelid = '{table_name}'::regclass),
+          true
+      ) AS full_ddl;
     """
-
     with engine.connect() as inner_conn:
-        trig_def = inner_conn.execute(text(trig_sql)).fetchone()[0]
+        trig_def = inner_conn.execute(text(trg_sql)).fetchone()[0]
 
     triggers.append({
         "name": trigger_name,
@@ -148,20 +148,18 @@ for row in trg_rows:
         "ddl": trig_def.strip(),
     })
 
-
-# --------------------------------------------
-# 7) Jinja2 Ortamını Hazırlayıp Şablonu Yükleme
+# ----------------------------------------
+# 7) Jinja2 Şablonunu Yükleme
 template_dir = os.path.join(os.path.dirname(__file__), "templates")
 env = Environment(
     loader=FileSystemLoader(template_dir),
     trim_blocks=True,
-    lstrip_blocks=True
+    lstrip_blocks=True,
 )
-template = env.get_template("models_template.j2")
+template = env.get_template("class_template.j2")
 
-
-# --------------------------------------------
-# 8) Şablonu Verilerle Render Etme
+# ----------------------------------------
+# 8) Şablonu render edip 'models.py' oluşturma
 rendered_code = template.render(
     tables=tables,
     views=views,
@@ -169,9 +167,6 @@ rendered_code = template.render(
     triggers=triggers,
 )
 
-
-# --------------------------------------------
-# 9) Çıktıyı Dosyaya Yazma
 output_dir = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(output_dir, exist_ok=True)
 output_path = os.path.join(output_dir, "models.py")
