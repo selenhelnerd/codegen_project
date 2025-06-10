@@ -61,31 +61,43 @@ for table_name in inspector.get_table_names(schema="public"):
         "comment": tbl_comment,
     })
 
-# 4) View’ları topla
-try:
-    view_names = inspector.get_view_names(schema="public")
-except NotImplementedError:
-    with engine.connect() as conn:
-        result = conn.execute(text("""
-            SELECT table_name
-            FROM information_schema.views
-            WHERE table_schema = 'public';
-        """))
-        view_names = [row[0] for row in result]
-
+# 4) View’ları topla - 
 views = []
-for view_name in view_names:
+with engine.connect() as conn:
+    # Tüm görünümlerin adlarını ve SQL tanımlarını çekiyoruz
+    view_rows = conn.execute(text("""
+        SELECT
+            viewname,
+            pg_get_viewdef(viewname, true) AS view_definition
+        FROM
+            pg_views
+        WHERE
+            schemaname = 'public'; -- public şemasındaki görünümleri al
+    """)).fetchall()
+
+for row in view_rows:
+    view_name = row[0]
+    view_ddl_text = row[1].strip()
+
+    # Görünümün sütunlarını da çekmek hala faydalı olacaktır (ORM için)
     cols = []
-    for col in inspector.get_columns(view_name, schema="public"):
-        cols.append({
-            "name": col["name"],
-            "type": str(col["type"]),
-        })
+    # Try-except bloğu ekleyerek, inspector.get_columns'ın bazı durumlarda hata verme olasılığını yönetebiliriz.
+    try:
+        for col in inspector.get_columns(view_name, schema="public"):
+            cols.append({
+                "name": col["name"],
+                "type": str(col["type"]),
+            })
+    except Exception as e:
+        print(f"Uyarı: Görünüm '{view_name}' için sütun bilgileri alınamadı: {e}")
+        # Hata durumunda boş bırakabiliriz, veya loglayabiliriz.
+        # Bu sütunlar manuel olarak doldurulmalıdır veya ORM kısmı için düşünülmeyebilir.
+
     views.append({
         "name": view_name,
-        "columns": cols,
+        "ddl": view_ddl_text, # DDL'i ekledik
+        "columns": cols,     # Sütun bilgilerini de tutmaya devam edelim
     })
-
 # 5) Stored function DDL’lerini topla
 functions = []
 with engine.connect() as conn:
@@ -158,4 +170,4 @@ output_path = os.path.join(output_dir, "models.py")
 with open(output_path, "w", encoding="utf-8") as f:
     f.write(rendered_code)
 
-print(f"✅ models.py dosyası oluşturuldu: {output_path}")
+print(f" models.py dosyası oluşturuldu: {output_path}")

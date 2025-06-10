@@ -1,0 +1,20 @@
+{# imports #}
+from sqlalchemy_declarative_extensions import view
+from sqlalchemy.sql import text
+from .base import Base
+
+{% for vw in views %}
+@view(Base)
+class {{ vw.class_name }}:
+    __tablename__ = "{{ vw.name }}"
+
+    
+    __view__ = text(
+        """
+{{ vw.ddl | indent(8) }}
+        """.strip()
+    )
+
+    {# Alternatif olarak, SQLAlchemy select() ifadesi kullanılabilir (varsa): #}
+    {# __view__ = select(...).where(...) #}
+{% endfor %}

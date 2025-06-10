@@ -72,41 +72,79 @@ class {{ tbl.name.replace('_',' ').title().replace(' ','') }}(Base):
 
 {# ------------------------------------------------------------- #}
 {# VIEWS (read‐only olarak autoload yapılacak) #}
+{# ------------------------------------------------------------- #}
+{# VIEWS (sqlalchemy-declarative-extensions ile yönetilecek) #}
 {% if views %}
 # ========================================
+# Görünüm Tanımları (SQLAlchemy Declarative Extensions ile)
+from sqlalchemy_declarative_extensions import declared_view, view_ddl
+from sqlalchemy.sql import select, text # select ve text'i de import ediyoruz
+
 {% for vw in views %}
 # View: {{ vw.name }}
+@declared_view
 class {{ vw.name.replace('_',' ').title().replace(' ','') }}(Base):
     __tablename__ = "{{ vw.name }}"
-    __table_args__ = {"autoload": True, "autoload_with": None}
+    # __view__ özelliği artık doğrudan SQL string'i veya select() ifadesini alabilir.
+    # Burada DDL'i doğrudan kullanacağız.
+    __view__ = view_ddl(
+        # SQL tanımının başına ve sonuna tırnak işaretlerini ekleyelim
+        # SQL tanımını text() fonksiyonu içine alarak daha okunur hale getirebiliriz
+        text("""{{ vw.ddl }}"""),
+        materialized=False # Eğer materyalleştirilmiş (materialized) bir görünümse burayı True yapın.
+                           # Bu bilgi mevcut DDL'den doğrudan çekilemez, manuel ayarlanmalıdır.
+    )
+
+    {# Görünümün sütunlarını manuel olarak tanımlamanız gerekecek #}
+    {# Bu, ORM sorgularınızın düzgün çalışması için önemlidir. #}
+    {# Buradaki `cols` listesi, size bir başlangıç noktası sağlayabilir. #}
+    {# Görünümün birincil anahtarını belirlemek kritik, aksi takdirde ORM hata verebilir. #}
+    {% if vw.columns %}
+    # Görünüm sütunları (Bu kısım otomatik üretildiği için dikkatli olun, PK'yi el ile atamanız gerekebilir)
+    {% for col in vw.columns %}
+        {# Görünümler için genellikle primary_key'i otomatik belirlemek zordur, #}
+        {# bu yüzden yorum satırı olarak bırakıp kullanıcının elle atamasını teşvik edebiliriz. #}
+    {{ col.name }} = Column({{ fix_type(col.type) }}) # , primary_key=True # Burası manuel eklenebilir
+    {% endfor %}
+    {% else %}
+    # UYARI: Bu görünüm için sütun bilgileri otomatik alınamadı.
+    # Lütfen aşağıdaki gibi sütunları manuel olarak tanımlayın:
+    # id = Column(Integer, primary_key=True)
+    # name = Column(String)
+    # value = Column(Integer)
+    {% endif %}
+
 {% endfor %}
 {% endif %}
 
-
 {# ------------------------------------------------------------- #}
-{# FONKSİYON ve TRIGGER DDL’LERİ (Yorum‐blok içinde) #}
+{# FONKSİYON ve TRIGGER DDL’LERİ (Yorum‐blok yerine deklaratif) #}
 {% if functions %}
 # ========================================
-# Fonksiyon Tanımları (DDL)
+# Fonksiyon Tanımları (SQLAlchemy Declarative Extensions ile)
+from sqlalchemy_declarative_extensions import declared_function, function_ddl
+
 {% for fn in functions %}
-# Function: {{ fn.name }}
-# === DDL Start ===
-"""
-{{ fn.ddl }}
-"""
-# === DDL End ===
+@declared_function("{{ fn.name }}")
+class {{ fn.name.replace('_',' ').title().replace(' ','') }}:
+    __function__ = function_ddl(
+        text("""{{ fn.ddl }}""")
+    )
 {% endfor %}
 {% endif %}
 
 {% if triggers %}
 # ========================================
-# Trigger Tanımları (DDL)
+# Trigger Tanımları (SQLAlchemy Declarative Extensions ile)
+from sqlalchemy_declarative_extensions import declared_trigger, trigger_ddl
+
 {% for trg in triggers %}
-# Trigger: {{ trg.name }} (Table: {{ trg.table }})
-# === DDL Start ===
-"""
-{{ trg.ddl }}
-"""
-# === DDL End ===
+@declared_trigger("{{ trg.name }}")
+class {{ trg.name.replace('_',' ').title().replace(' ','') }}:
+    __tablename__ = "{{ trg.table }}" # Trigger'ın bağlı olduğu tablo
+    __trigger__ = trigger_ddl(
+        text("""{{ trg.ddl }}""")
+    )
 {% endfor %}
 {% endif %}
+
