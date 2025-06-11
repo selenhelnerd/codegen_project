@@ -1,3 +1,5 @@
+import os
+import sys
 from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
@@ -5,6 +7,11 @@ from sqlalchemy_declarative_extensions import register_alembic_events
 
 # Alembic config object
 config = context.config
+
+# Ensure project root is on PYTHONPATH so 'app' module can be imported
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 # Set up Python logging using the config file
 fileConfig(config.config_file_name)
@@ -14,7 +21,7 @@ register_alembic_events(schemas=True, roles=True, grants=True, rows=True)
 
 # ✅ Import your models (includes @view definitions and all table metadata)
 from app.db.base import Base
-import app.db.models
+
 import app.db.views
 
 # ✅ Metadata for "autogenerate"
@@ -67,4 +74,3 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
-# End of alembic/env.py
