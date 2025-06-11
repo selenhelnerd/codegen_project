@@ -5,24 +5,6 @@ from .base import Base
 
 
 @view(Base)
-class VwTable2Simple:
-    __tablename__ = "vw_table_2_simple"
-
-    
-    __view__ = text(
-        """
-SELECT id,
-            col1      AS col_one ,
-            col2
-           FROM table_2
-          WHERE col1 IS NOT NULL;
-        """.strip()
-    )
-
-    
-    
-
-@view(Base)
 class VwTable1Join36:
     __tablename__ = "vw_table_1_join_36"
 
@@ -35,6 +17,24 @@ SELECT t1.id AS table1_id,
             rt36.info AS related36_info
            FROM table_1 t1
              LEFT JOIN related_table_36 rt36 ON t1.id = rt36.table_1_id;
+        """.strip()
+    )
+
+    
+    
+
+@view(Base)
+class VwTable2Simple:
+    __tablename__ = "vw_table_2_simple"
+
+    
+    __view__ = text(
+        """
+SELECT id,
+            col1 AS col_one,
+            col2
+           FROM table_2
+          WHERE NOT col1 IS NULL;
         """.strip()
     )
 

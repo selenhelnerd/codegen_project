@@ -3,18 +3,18 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.sql import select
 from jinja2 import Environment, FileSystemLoader
 
-# ---- DB bağlantısı ----
+#  DB bağlantısı        
 DB_USER, DB_PASS = "selen", "selen"
 DB_HOST, DB_PORT, DB_NAME = "localhost", 5432, "my_large_test_db"
 URL = f"postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 engine    = create_engine(URL, future=True)
 inspector = inspect(engine)
 
-# ---- Yardımcı fonksiyonlar ----
+#   Yardımcı fonksiyonlar  
 def camelize(s: str) -> str:
     return "".join(part.capitalize() for part in s.split("_"))
 
-# ---- View metadata’sını topla ----
+#   View metadata’sını al  
 views = []
 with engine.connect() as conn:
     rows = conn.execute(text("""
@@ -24,7 +24,7 @@ with engine.connect() as conn:
     """)).all()
 
 for viewname, ddl in rows:
-    # Sütunları da almak isterseniz:
+    # sutunlari da almak icin:
     cols = []
     for col in inspector.get_columns(viewname, schema="public"):
         cols.append(col["name"])
@@ -35,7 +35,7 @@ for viewname, ddl in rows:
         "columns": cols,
     })
 
-# ---- Jinja ortamı ----
+#   Jinja   
 template_dir = os.path.join(os.path.dirname(__file__), "templates")
 env = Environment(
     loader=FileSystemLoader(template_dir),
@@ -44,11 +44,11 @@ env = Environment(
 )
 template = env.get_template("view_template.j2")
 
-# ---- Render & kaydet ----
+#   render & kaydet  
 output = template.render(views=views)
 out_dir  = os.path.join(os.path.dirname(__file__), "app", "db")
 os.makedirs(out_dir, exist_ok=True)
 with open(os.path.join(out_dir, "views.py"), "w", encoding="utf-8") as f:
     f.write(output)
 
-print("✅ views.py oluşturuldu →", os.path.join(out_dir, "views.py"))
+print("OK/ views.py oluşturuldu →", os.path.join(out_dir, "views.py"))
