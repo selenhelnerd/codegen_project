@@ -12,7 +12,7 @@ class VwTable2Simple:
     __view__ = text(
         """
 SELECT id,
-            col1      AS col_one ,
+            col1,
             col2
            FROM table_2
           WHERE col1 IS NOT NULL;

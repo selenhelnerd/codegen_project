@@ -46,7 +46,7 @@ template = env.get_template("view_template.j2")
 
 # ---- Render & kaydet ----
 output = template.render(views=views)
-out_dir  = os.path.join(os.path.dirname(__file__), "output")
+out_dir  = os.path.join(os.path.dirname(__file__), "app", "db")
 os.makedirs(out_dir, exist_ok=True)
 with open(os.path.join(out_dir, "views.py"), "w", encoding="utf-8") as f:
     f.write(output)

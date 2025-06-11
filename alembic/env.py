@@ -1,22 +1,34 @@
 from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
+from sqlalchemy_declarative_extensions import register_alembic_events
 
-# Alembic config nesnesi
+# Alembic config object
 config = context.config
 
-# logging yapılandırması
+# Set up Python logging using the config file
 fileConfig(config.config_file_name)
 
-# ✅ Veritabanı modelleri burada import ediliyor
+# ✅ Register Declarative Extensions Alembic hooks (enables autogenerate for Views, Functions, etc.)
+register_alembic_events(schemas=True, roles=True, grants=True, rows=True)
+
+# ✅ Import your models (includes @view definitions and all table metadata)
 from app.db.base import Base
 import app.db.models
 import app.db.views
 
-# ✅ MetaData nesnesi belirleniyor
+# ✅ Metadata for "autogenerate"
 target_metadata = Base.metadata
 
-# --- Run offline migrations ---
+# Helper: include_object filter to prevent dropping tables not in metadata
+def include_object(obj, name, type_, reflected, compare_to):
+    # Skip dropping tables that exist in database but not in metadata
+    if type_ == 'table' and compare_to is None:
+        return False
+    # Include everything else (views, constraints, added tables, modifications)
+    return True
+
+# --- Offline migrations ---
 def run_migrations_offline():
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
@@ -24,13 +36,14 @@ def run_migrations_offline():
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        include_schemas=True,  # Eğer şema destekliyorsan bu önemli
+        include_schemas=True,
+        include_object=include_object,
     )
 
     with context.begin_transaction():
         context.run_migrations()
 
-# --- Run online migrations ---
+# --- Online migrations ---
 def run_migrations_online():
     connectable = engine_from_config(
         config.get_section(config.config_ini_section),
@@ -43,13 +56,15 @@ def run_migrations_online():
             connection=connection,
             target_metadata=target_metadata,
             include_schemas=True,
+            include_object=include_object,
         )
 
         with context.begin_transaction():
             context.run_migrations()
 
-# Hangi migration tipi çalışacaksa onu çağır
+# Choose the appropriate migration mode
 if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
+# End of alembic/env.py
