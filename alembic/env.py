@@ -4,6 +4,7 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 from sqlalchemy_declarative_extensions import register_alembic_events
+from app.db.views import *
 
 # Alembic config object
 config = context.config
@@ -21,7 +22,7 @@ register_alembic_events(schemas=True, roles=True, grants=True, rows=True)
 
 # ✅ Import your models (includes @view definitions and all table metadata)
 from app.db.base import Base
-
+from app.db import views 
 import app.db.views
 
 # ✅ Metadata for "autogenerate"
