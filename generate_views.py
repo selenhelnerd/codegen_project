@@ -22,7 +22,7 @@ with engine.connect() as conn:
         SELECT table_name AS viewname,
                view_definition AS ddl
           FROM information_schema.views
-         WHERE table_schema = 'public'
+         
          ORDER BY table_name;
         """
     )).all()
@@ -33,7 +33,7 @@ with engine.connect() as conn:
             """
             SELECT column_name
               FROM information_schema.columns
-             WHERE table_schema = 'public'
+             
                AND table_name = :viewname
              ORDER BY ordinal_position;
             """
